@@ -178,6 +178,7 @@ class AccountMove(models.Model):
             iss = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'iss')
             csll = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'csll')
             irpj = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'irpj')
+            inss = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'inss')
 
             ipi = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'ipi')
 
@@ -193,8 +194,8 @@ class AccountMove(models.Model):
                 'uom_id': line.product_uom_id.id,
                 'quantidade': line.quantity,
                 'preco_unitario': line.price_unit,
-                'valor_bruto': line.price_subtotal,
-                # 'desconto': line.valor_desconto,
+                'valor_bruto': round(line.quantity * line.price_unit, 2),
+                'desconto': round(line.quantity * line.price_unit, 2) - line.price_total,
                 'valor_liquido': line.price_total,
                 'origem': line.product_id.l10n_br_origin,
                 #  'tributos_estimados': line.tributos_estimados,
@@ -247,8 +248,8 @@ class AccountMove(models.Model):
                 'item_lista_servico': line.product_id.service_type_id.code,
                 'codigo_servico_municipio': line.product_id.service_code,
                 'iss_aliquota': iss.tax_line_id.amount or 0,
-                'iss_base_calculo': line.price_total or 0,
-                'iss_valor': round(line.price_total *  iss.tax_line_id.amount / 100, 2),
+                'iss_base_calculo': line.price_subtotal or 0,
+                'iss_valor': round(line.price_subtotal * iss.tax_line_id.amount / 100, 2),
                 # 'iss_valor_retencao':
                 # abs(line.iss_valor) if line.iss_valor < 0 else 0,
                 # - RETENÇÔES -
@@ -263,23 +264,32 @@ class AccountMove(models.Model):
                 # 'irrf_aliquota': abs(line.irrf_aliquota),
                 # 'irrf_valor_retencao':
                 # abs(line.irrf_valor) if line.irrf_valor < 0 else 0,
-                # 'inss_base_calculo': line.inss_base_calculo,
-                # 'inss_aliquota': abs(line.inss_aliquota),
-                # 'inss_valor_retencao':
-                # abs(line.inss_valor) if line.inss_valor < 0 else 0,
+                'inss_base_calculo': line.price_subtotal or 0,
+                'inss_aliquota': abs(inss.tax_line_id.amount or 0),
+                'inss_valor_retencao': abs(
+                    round(line.price_subtotal * inss.tax_line_id.amount / 100, 2)
+                ),
             }
             cfop = fiscal_pos.l10n_br_cfop_id.code or '5101'
-            if self.company_id.state_id == self.commercial_partner_id.state_id:
-                cfop = '5' + cfop[1:]
-            else:
-                cfop = '6' + cfop[1:]
+
+            if self.type in ['in_invoice', 'out_refund']:
+                if self.company_id.state_id == self.commercial_partner_id.state_id:
+                    cfop = '1' + cfop[1:]
+                else:
+                    cfop = '2' + cfop[1:]
+            elif self.type in ['out_invoice', 'in_refund']:
+                if self.company_id.state_id == self.commercial_partner_id.state_id:
+                    cfop = '5' + cfop[1:]
+                else:
+                    cfop = '6' + cfop[1:]
+
             vals['cfop'] = cfop
 
             lines.append((0, 0, vals))
 
         return lines
 
-    def _prepare_eletronic_doc_vals(self):
+    def _prepare_eletronic_doc_vals(self, invoice_lines):
         invoice = self
         num_controle = int(''.join([str(SystemRandom().randrange(9))
                                     for i in range(8)]))
@@ -312,9 +322,9 @@ class AccountMove(models.Model):
             # 'valor_pis': invoice.pis_value,
             # 'valor_cofins': invoice.cofins_value,
             # 'valor_ii': invoice.ii_value,
-            'valor_bruto': invoice.amount_total,
+            # 'valor_bruto': invoice.amount_total,
             # 'valor_desconto': invoice.total_desconto,
-            'valor_final': invoice.amount_total,
+            # 'valor_final': invoice.amount_total,
             # 'valor_bc_icms': invoice.icms_base,
             # 'valor_bc_icmsst': invoice.icms_st_base,
             # 'valor_estimado_tributos': invoice.total_tributos_estimados,
@@ -332,24 +342,19 @@ class AccountMove(models.Model):
             'fatura_bruto': invoice.amount_total,
             'fatura_desconto': 0.0,
             'fatura_liquido': invoice.amount_total,
-            'pedido_compra': invoice.invoice_payment_ref,
+            'pedido_compra': invoice.ref,
             'serie_documento': invoice.fiscal_position_id.serie_nota_fiscal,
             'numero': numero_nfe,
             'numero_rps': numero_rps,
         }
         vals['cod_regime_tributario'] = '1' if invoice.company_id.l10n_br_tax_regime == 'simples' else '3'
-         # Indicador Consumidor Final
-        if invoice.commercial_partner_id.is_company:
-            vals['ind_final'] = '0'
-        else:
-            vals['ind_final'] = '1'
+
+        # Indicador de destino
         vals['ind_dest'] = '1'
         if invoice.company_id.state_id != invoice.commercial_partner_id.state_id:
             vals['ind_dest'] = '2'
         if invoice.company_id.country_id != invoice.commercial_partner_id.country_id:
             vals['ind_dest'] = '3'
-        if invoice.fiscal_position_id.ind_final:
-            vals['ind_final'] = invoice.fiscal_position_id.ind_final
 
         # Indicador IE Destinatário
         ind_ie_dest = False
@@ -370,37 +375,87 @@ class AccountMove(models.Model):
         if invoice.commercial_partner_id.l10n_br_indicador_ie_dest:
             ind_ie_dest = invoice.commercial_partner_id.l10n_br_indicador_ie_dest
         vals['ind_ie_dest'] = ind_ie_dest
+
+        # Indicador Consumidor Final
+        if invoice.commercial_partner_id.is_company:
+            if vals['ind_ie_dest'] == '9':
+                vals['ind_final'] = '1'
+            else:
+                vals['ind_final'] = '0'
+        else:
+            vals['ind_final'] = '1'
+
+        if invoice.fiscal_position_id.ind_final:
+            vals['ind_final'] = invoice.fiscal_position_id.ind_final
+
         iest_id = invoice.company_id.l10n_br_iest_ids.filtered(
             lambda x: x.state_id == invoice.commercial_partner_id.state_id)
         if iest_id:
             vals['iest'] = iest_id.name
 
         total_produtos = total_servicos = 0.0
-        for inv_line in self.invoice_line_ids:
+        bruto_produtos = bruto_servicos = 0.0
+        for inv_line in invoice_lines:
             if inv_line.product_id.type == 'service':
                 total_servicos += inv_line.price_subtotal
+                bruto_servicos += round(inv_line.quantity * inv_line.price_unit, 2)
             else:
                 total_produtos += inv_line.price_subtotal
+                bruto_produtos += round(inv_line.quantity * inv_line.price_unit, 2)
 
         vals.update({
+            'valor_bruto': bruto_produtos + bruto_servicos,
             'valor_servicos': total_servicos,
             'valor_produtos': total_produtos,
+            'valor_desconto': (bruto_produtos + bruto_servicos) - (total_produtos + total_servicos),
+            'valor_final': total_produtos + total_servicos,
         })
+
         return vals
 
     def action_create_eletronic_document(self):
         for move in self:
-            vals = move._prepare_eletronic_doc_vals()
-            services = move.invoice_line_ids.filtered(lambda  x: x.product_id.type == 'service')
+            services = move.invoice_line_ids.filtered(lambda x: x.product_id.type == 'service')
             if services:
-                vals['model'] = 'nfse'
-                vals['document_line_ids'] = move._prepare_eletronic_line_vals(services)
-                self.env['eletronic.document'].create(vals)
-            products = move.invoice_line_ids.filtered(lambda  x: x.product_id.type != 'service')
+                self._create_service_eletronic_document(move, services)
+
+            products = move.invoice_line_ids.filtered(lambda x: x.product_id.type != 'service')
             if products:
-                vals['model'] = 'nfe'
-                vals['document_line_ids'] = move._prepare_eletronic_line_vals(products)
-                self.env['eletronic.document'].create(vals)
+                self._create_product_eletronic_document(move, products)
+
+    def _create_service_eletronic_document(self, move, services):
+        vals = move._prepare_eletronic_doc_vals(services)
+        vals['model'] = 'nfse'
+        vals['document_line_ids'] = move._prepare_eletronic_line_vals(services)
+        self.env['eletronic.document'].create(vals)
+
+    def _create_product_eletronic_document(self, move, products):
+        vals = move._prepare_eletronic_doc_vals(products)
+        vals['model'] = 'nfe'
+
+        if self.type == 'out_refund':
+            vals['related_document_ids'] = self._create_related_doc(vals)
+
+        vals['document_line_ids'] = move._prepare_eletronic_line_vals(products)
+        self.env['eletronic.document'].create(vals)
+
+    def _create_related_doc(self, vals):
+        related_move_id = self.env['account.move'].search([
+            ('reversal_move_id', 'in', self.id)], limit=1)
+
+        doc = self.env['eletronic.document'].search([
+            ('move_id', '=', related_move_id.id),
+            ('model', '=', vals['model']),
+            ('state', '=', 'done')
+        ], limit=1, order='id desc')
+
+        if doc:
+            related_doc = self.env['nfe.related.document'].create({
+                'move_related_id': related_move_id.id,
+                'document_type': 'nfe',
+                'access_key': doc.chave_nfe,
+            })
+            return related_doc
 
     def action_post(self):
         moves = self.filtered(lambda x: x.l10n_br_edoc_policy == 'directly' and x.type != 'entry')

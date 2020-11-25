@@ -65,15 +65,18 @@ class EletronicDocument(models.Model):
 
             doc.iss_base_calculo = sum([x.iss_base_calculo for x in doc.document_line_ids])
             doc.iss_valor = sum([x.iss_valor for x in doc.document_line_ids])
-            doc.iss_valor_retencao = sum([x.iss_valor_retencao for x in doc.document_line_ids])   
+            doc.iss_valor_retencao = sum([x.iss_valor_retencao for x in doc.document_line_ids])
 
             doc.irpj_base_calculo = sum([x.irpj_base_calculo for x in doc.document_line_ids])
             doc.irpj_valor = sum([x.irpj_valor for x in doc.document_line_ids])
-            doc.irpj_valor_retencao = sum([x.irpj_valor_retencao for x in doc.document_line_ids])  
+            doc.irpj_valor_retencao = sum([x.irpj_valor_retencao for x in doc.document_line_ids])
 
             doc.csll_base_calculo = sum([x.csll_base_calculo for x in doc.document_line_ids])
             doc.csll_valor = sum([x.csll_valor for x in doc.document_line_ids])
-            doc.csll_valor_retencao = sum([x.csll_valor_retencao for x in doc.document_line_ids])  
+            doc.csll_valor_retencao = sum([x.csll_valor_retencao for x in doc.document_line_ids])
+
+            doc.inss_base_calculo = sum([x.inss_base_calculo for x in doc.document_line_ids])
+            doc.inss_valor_retencao = sum([x.inss_valor_retencao for x in doc.document_line_ids])
 
     # ------------ PIS ---------------------
     pis_base_calculo = fields.Monetary(
@@ -455,12 +458,11 @@ class EletronicDocument(models.Model):
             descricao = ''
             for line in item.document_line_ids:
                 if line.name:
-                    descricao += line.name.replace('\n', '<br/>') + '<br/>'
+                    descricao += line.name.replace('\n', '|') + '|'
             if item.informacoes_legais:
-                descricao += item.informacoes_legais.replace('\n', '<br/>')
+                descricao += item.informacoes_legais.replace('\n', '|')
             if item.informacoes_complementares:
-                descricao += item.informacoes_complementares.replace(
-                    '\n', '<br/>')
+                descricao += item.informacoes_complementares.replace('\n', '|')
             item.discriminacao_servicos = descricao
 
     def _compute_legal_information(self):
@@ -790,11 +792,10 @@ class EletronicDocument(models.Model):
                 'valor_iss': round(doc.iss_valor, 2),
                 'valor_total': round(doc.valor_final, 2),
                 'iss_valor_retencao': round(doc.iss_valor_retencao, 2),
-
-                'valor_carga_tributaria': round(doc.valor_estimado_tributos, 2),
+                'inss_valor_retencao': round(doc.inss_valor_retencao, 2),
+                'valor_carga_tributaria': round(doc.valor_estimado_tributos, 2) or '',
                 'fonte_carga_tributaria': 'IBPT',
                 'iss_retido': True if doc.iss_valor_retencao > 0.0 else False,
-
                 'aedf': doc.company_id.l10n_br_aedf,
                 'client_id': doc.company_id.l10n_br_client_id,
                 'client_secret': doc.company_id.l10n_br_client_secret,
@@ -986,6 +987,7 @@ class EletronicDocumentLine(models.Model):
         string="Tipo Produto", readonly=True, states=STATE)
     cfop = fields.Char('CFOP', size=5, readonly=True, states=STATE)
     ncm = fields.Char('NCM', size=10, readonly=True, states=STATE)
+    unidade_medida = fields.Char('Un. Medida Xml', size=10, readonly=True, states=STATE)
 
     item_lista_servico = fields.Char(
         string="Código do serviço", size=10, readonly=True, states=STATE)

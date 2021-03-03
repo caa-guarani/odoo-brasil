@@ -162,128 +162,17 @@ class AccountMove(models.Model):
                     errors.append('Cliente / Endereço - Nome do país')
                 if not partner.country_id.l10n_br_ibge_code:
                     errors.append('Cliente / Endereço - Cód. do BC do país')
-        
+
         if len(errors) > 0:
             msg = "\n".join(
                 ["Por favor corrija os erros antes de prosseguir"] + errors)
             raise UserError(msg)
 
-
     def _prepare_eletronic_line_vals(self, invoice_lines):
         lines = []
         for line in invoice_lines:
 
-            pis = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'pis')
-            cofins = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'cofins')
-            iss = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'iss')
-            csll = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'csll')
-            irpj = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'irpj')
-            inss = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'inss')
-
-            ipi = self.line_ids.filtered(lambda x: x.tax_line_id.domain == 'ipi')
-
-            fiscal_pos = self.fiscal_position_id
-
-            vals = {
-                'name': line.name,
-                'product_id': line.product_id.id,
-                'eletronic_document_id': line.id,
-                'company_id': line.company_id.id,
-                'tipo_produto': 'service' if line.product_id.type == 'service' else 'product',
-                # 'cfop': line.cfop_id.code,
-                'uom_id': line.product_uom_id.id,
-                'quantidade': line.quantity,
-                'preco_unitario': line.price_unit,
-                'valor_bruto': round(line.quantity * line.price_unit, 2),
-                'desconto': round(line.quantity * line.price_unit, 2) - line.price_total,
-                'valor_liquido': line.price_total,
-                'origem': line.product_id.l10n_br_origin,
-                #  'tributos_estimados': line.tributos_estimados,
-                'ncm': line.product_id.l10n_br_ncm_id.code,
-                'pedido_compra': self.ref,
-                # 'item_pedido_compra': line.item_pedido_compra,
-                # - ICMS -
-                'icms_cst': fiscal_pos.csosn_icms,
-                # 'icms_aliquota': line.icms_aliquota,
-                # 'icms_tipo_base': line.icms_tipo_base,
-                # 'icms_aliquota_reducao_base': line.icms_aliquota_reducao_base,
-                # 'icms_base_calculo': line.icms_base_calculo,
-                # 'icms_valor': line.icms_valor,
-                # - ICMS ST -
-                # 'icms_st_aliquota': line.icms_st_aliquota,
-                # 'icms_st_aliquota_mva': line.icms_st_aliquota_mva,
-                # 'icms_st_aliquota_reducao_base': line.\
-                # icms_st_aliquota_reducao_base,
-                # 'icms_st_base_calculo': line.icms_st_base_calculo,
-                # 'icms_st_valor': line.icms_st_valor,
-                # # - Simples Nacional -
-                'icms_aliquota_credito': fiscal_pos.icms_aliquota_credito,
-                'icms_valor_credito': round(line.price_total *  fiscal_pos.icms_aliquota_credito / 100, 2),
-                # - IPI -
-                'ipi_cst': '99',
-                'ipi_aliquota': ipi.tax_line_id.amount or 0,
-                'ipi_base_calculo': line.price_total or 0,
-                'ipi_valor': round(line.price_total *  ipi.tax_line_id.amount / 100, 2),
-                # 'ipi_reducao_bc': line.ipi_reducao_bc,
-                # - II -
-                # 'ii_base_calculo': line.ii_base_calculo,
-                # 'ii_valor_despesas': line.ii_valor_despesas,
-                # 'ii_valor': line.ii_valor,
-                # 'ii_valor_iof': line.ii_valor_iof,
-                # - PIS -
-                'pis_cst': '49',
-                'pis_aliquota': pis.tax_line_id.amount or 0,
-                'pis_base_calculo': line.price_total or 0,
-                'pis_valor': round(line.price_total *  pis.tax_line_id.amount / 100, 2),
-                # 'pis_valor_retencao':
-                # abs(line.pis_valor) if line.pis_valor < 0 else 0,
-                # - COFINS -
-                'cofins_cst': '49',
-                'cofins_aliquota':  cofins.tax_line_id.amount or 0,
-                'cofins_base_calculo': line.price_total or 0,
-                'cofins_valor': round(line.price_total *  cofins.tax_line_id.amount / 100, 2),
-                # 'cofins_valor_retencao':
-                # abs(line.cofins_valor) if line.cofins_valor < 0 else 0,
-                # - ISS -
-                'item_lista_servico': line.product_id.service_type_id.code,
-                'codigo_servico_municipio': line.product_id.service_code,
-                'iss_aliquota': iss.tax_line_id.amount or 0,
-                'iss_base_calculo': line.price_subtotal or 0,
-                'iss_valor': round(line.price_subtotal * iss.tax_line_id.amount / 100, 2),
-                # 'iss_valor_retencao':
-                # abs(line.iss_valor) if line.iss_valor < 0 else 0,
-                # - RETENÇÔES -
-                'csll_aliquota': csll.tax_line_id.amount or 0,
-                'csll_base_calculo': line.price_total or 0,
-                'csll_valor': round(line.price_total *  csll.tax_line_id.amount / 100, 2),
-                # abs(line.csll_valor) if line.csll_valor < 0 else 0,
-                'irpj_aliquota':  irpj.tax_line_id.amount or 0,
-                'irpj_base_calculo': line.price_total or 0,
-                'irpj_valor': round(line.price_total *  irpj.tax_line_id.amount / 100, 2),
-                # 'irrf_base_calculo': line.irrf_base_calculo,
-                # 'irrf_aliquota': abs(line.irrf_aliquota),
-                # 'irrf_valor_retencao':
-                # abs(line.irrf_valor) if line.irrf_valor < 0 else 0,
-                'inss_base_calculo': line.price_subtotal or 0,
-                'inss_aliquota': abs(inss.tax_line_id.amount or 0),
-                'inss_valor_retencao': abs(
-                    round(line.price_subtotal * inss.tax_line_id.amount / 100, 2)
-                ),
-            }
-            cfop = fiscal_pos.l10n_br_cfop_id.code or '5101'
-
-            if self.type in ['in_invoice', 'out_refund']:
-                if self.company_id.state_id == self.commercial_partner_id.state_id:
-                    cfop = '1' + cfop[1:]
-                else:
-                    cfop = '2' + cfop[1:]
-            elif self.type in ['out_invoice', 'in_refund']:
-                if self.company_id.state_id == self.commercial_partner_id.state_id:
-                    cfop = '5' + cfop[1:]
-                else:
-                    cfop = '6' + cfop[1:]
-
-            vals['cfop'] = cfop
+            vals = line.get_eletronic_line_vals()
 
             lines.append((0, 0, vals))
 
@@ -315,28 +204,6 @@ class AccountMove(models.Model):
             'fiscal_position_id': invoice.fiscal_position_id.id,
             'natureza_operacao': invoice.fiscal_position_id.name,
             'ind_pres': invoice.fiscal_position_id.ind_pres,
-            'finalidade_emissao': invoice.fiscal_position_id.finalidade_emissao,
-            # 'valor_icms': invoice.icms_value,
-            # 'valor_icmsst': invoice.icms_st_value,
-            # 'valor_ipi': invoice.ipi_value,
-            # 'valor_pis': invoice.pis_value,
-            # 'valor_cofins': invoice.cofins_value,
-            # 'valor_ii': invoice.ii_value,
-            # 'valor_bruto': invoice.amount_total,
-            # 'valor_desconto': invoice.total_desconto,
-            # 'valor_final': invoice.amount_total,
-            # 'valor_bc_icms': invoice.icms_base,
-            # 'valor_bc_icmsst': invoice.icms_st_base,
-            # 'valor_estimado_tributos': invoice.total_tributos_estimados,
-            # 'valor_retencao_pis': invoice.pis_retention,
-            # 'valor_retencao_cofins': invoice.cofins_retention,
-            # 'valor_bc_irrf': invoice.irrf_base,
-            # 'valor_retencao_irrf': invoice.irrf_retention,
-            # 'valor_bc_csll': invoice.csll_base,
-            # 'valor_retencao_csll': invoice.csll_retention,
-            # 'valor_bc_inss': invoice.inss_base,
-            # 'valor_retencao_inss': invoice.inss_retention,
-
             'informacoes_complementares': invoice.narration,
             'numero_fatura': invoice.name,
             'fatura_bruto': invoice.amount_total,
@@ -346,6 +213,9 @@ class AccountMove(models.Model):
             'serie_documento': invoice.fiscal_position_id.serie_nota_fiscal,
             'numero': numero_nfe,
             'numero_rps': numero_rps,
+            'valor_frete': invoice.l10n_br_delivery_amount,
+            'valor_seguro': invoice.l10n_br_insurance_amount,
+            'valor_despesas': invoice.l10n_br_expense_amount,
         }
         vals['cod_regime_tributario'] = '1' if invoice.company_id.l10n_br_tax_regime == 'simples' else '3'
 
@@ -395,31 +265,57 @@ class AccountMove(models.Model):
 
         total_produtos = total_servicos = 0.0
         bruto_produtos = bruto_servicos = 0.0
+        total_desconto = 0
         for inv_line in invoice_lines:
+            total_desconto += round(inv_line.price_unit * inv_line.quantity * inv_line.discount / 100, 2)
             if inv_line.product_id.type == 'service':
-                total_servicos += inv_line.price_subtotal
+                total_servicos += inv_line.price_total
                 bruto_servicos += round(inv_line.quantity * inv_line.price_unit, 2)
             else:
-                total_produtos += inv_line.price_subtotal
+                total_produtos += inv_line.price_total
                 bruto_produtos += round(inv_line.quantity * inv_line.price_unit, 2)
 
         vals.update({
             'valor_bruto': bruto_produtos + bruto_servicos,
             'valor_servicos': total_servicos,
             'valor_produtos': total_produtos,
-            'valor_desconto': (bruto_produtos + bruto_servicos) - (total_produtos + total_servicos),
+            'valor_desconto': total_desconto,
             'valor_final': total_produtos + total_servicos,
         })
 
         return vals
 
+    def sum_line_taxes(self, vals):
+        lines = vals.get("document_line_ids")
+        return {
+            'valor_icms': sum(line[2].get("icms_valor", 0) for line in lines),
+            'valor_icmsst': sum(line[2].get("icms_st_valor", 0) for line in lines),
+            'valor_ipi': sum(line[2].get("ipi_valor", 0) for line in lines),
+            'pis_valor': sum(line[2].get("pis_valor", 0) for line in lines),
+            'cofins_valor': sum(line[2].get("cofins_valor", 0) for line in lines),
+            'valor_ii': sum(line[2].get("ii_valor", 0) for line in lines),
+            'valor_bc_icms': sum(line[2].get("icms_base_calculo", 0) for line in lines),
+            'valor_bc_icmsst': sum(line[2].get("icms_st_base_calculo", 0) for line in lines),
+            'pis_valor_retencao': sum(line[2].get("pis_valor_retencao", 0) for line in lines),
+            'cofins_valor_retencao': sum(line[2].get("cofins_valor_retencao", 0) for line in lines),
+            'irrf_base_calculo': sum(line[2].get("irrf_base_calculo", 0) for line in lines),
+            'irrf_valor_retencao': sum(line[2].get("irrf_valor_retencao", 0) for line in lines),
+            'csll_base_calculo': sum(line[2].get("csll_base_calculo", 0) for line in lines),
+            'csll_valor_retencao': sum(line[2].get("csll_valor_retencao", 0) for line in lines),
+            'inss_base_calculo': sum(line[2].get("inss_base_calculo", 0) for line in lines),
+            'inss_valor_retencao': sum(line[2].get("inss_valor_retencao", 0) for line in lines),
+        }
+
     def action_create_eletronic_document(self):
         for move in self:
-            services = move.invoice_line_ids.filtered(lambda x: x.product_id.type == 'service')
+            invoice_lines = move.invoice_line_ids.filtered(
+                lambda x: not x.is_delivery_expense_or_insurance()
+            )
+            services = invoice_lines.filtered(lambda x: x.product_id.type == 'service')
             if services:
                 self._create_service_eletronic_document(move, services)
 
-            products = move.invoice_line_ids.filtered(lambda x: x.product_id.type != 'service')
+            products = invoice_lines.filtered(lambda x: x.product_id.type != 'service')
             if products:
                 self._create_product_eletronic_document(move, products)
 
@@ -427,6 +323,7 @@ class AccountMove(models.Model):
         vals = move._prepare_eletronic_doc_vals(services)
         vals['model'] = 'nfse'
         vals['document_line_ids'] = move._prepare_eletronic_line_vals(services)
+        vals.update(self.sum_line_taxes(vals))
         self.env['eletronic.document'].create(vals)
 
     def _create_product_eletronic_document(self, move, products):
@@ -437,6 +334,7 @@ class AccountMove(models.Model):
             vals['related_document_ids'] = self._create_related_doc(vals)
 
         vals['document_line_ids'] = move._prepare_eletronic_line_vals(products)
+        vals.update(self.sum_line_taxes(vals))
         self.env['eletronic.document'].create(vals)
 
     def _create_related_doc(self, vals):
@@ -484,3 +382,125 @@ class AccountMove(models.Model):
             vals = self.env['ir.actions.act_window'].browse(act_id).read()[0]
             vals['domain'] = [('move_id', '=', self.id)]
             return vals
+
+
+class AccountMoveLine(models.Model):
+    _inherit = "account.move.line"
+
+    def get_eletronic_line_vals(self):
+        pis = self.move_id.line_ids.filtered(lambda x: x.tax_line_id.domain == 'pis')
+        cofins = self.move_id.line_ids.filtered(lambda x: x.tax_line_id.domain == 'cofins')
+        iss = self.move_id.line_ids.filtered(lambda x: x.tax_line_id.domain == 'iss')
+        csll = self.move_id.line_ids.filtered(lambda x: x.tax_line_id.domain == 'csll')
+        irpj = self.move_id.line_ids.filtered(lambda x: x.tax_line_id.domain == 'irpj')
+        inss = self.move_id.line_ids.filtered(lambda x: x.tax_line_id.domain == 'inss')
+
+        ipi = self.move_id.line_ids.filtered(lambda x: x.tax_line_id.domain == 'ipi')
+
+        fiscal_pos = self.move_id.fiscal_position_id
+
+        vals = {
+            'name': self.name,
+            'product_id': self.product_id.id,
+            'eletronic_document_id': self.id,
+            'company_id': self.company_id.id,
+            'tipo_produto': 'service' if self.product_id.type == 'service' else 'product',
+            # 'cfop': self.cfop_id.code,
+            'uom_id': self.product_uom_id.id,
+            'quantidade': self.quantity,
+            'preco_unitario': self.price_unit,
+            'valor_bruto': round(self.quantity * self.price_unit, 2),
+            'desconto': round(self.quantity * self.price_unit, 2) - self.price_subtotal,
+            'valor_liquido': self.price_total,
+            'origem': self.product_id.l10n_br_origin,
+            #  'tributos_estimados': self.tributos_estimados,
+            'ncm': self.product_id.l10n_br_ncm_id.code,
+            'cest': self.product_id.l10n_br_cest,
+            'pedido_compra': self.ref,
+            # 'item_pedido_compra': self.item_pedido_compra,
+            # - ICMS -
+            'icms_cst': fiscal_pos.csosn_icms,
+            # 'icms_aliquota': self.icms_aliquota,
+            # 'icms_tipo_base': self.icms_tipo_base,
+            # 'icms_aliquota_reducao_base': self.icms_aliquota_reducao_base,
+            # 'icms_base_calculo': self.icms_base_calculo,
+            # 'icms_valor': self.icms_valor,
+            # - ICMS ST -
+            # 'icms_st_aliquota': self.icms_st_aliquota,
+            # 'icms_st_aliquota_mva': self.icms_st_aliquota_mva,
+            # 'icms_st_aliquota_reducao_base': self.\
+            # icms_st_aliquota_reducao_base,
+            # 'icms_st_base_calculo': self.icms_st_base_calculo,
+            # 'icms_st_valor': self.icms_st_valor,
+            # # - Simples Nacional -
+            'icms_aliquota_credito': fiscal_pos.icms_aliquota_credito,
+            'icms_valor_credito': round(self.price_total * fiscal_pos.icms_aliquota_credito / 100, 2),
+            # - IPI -
+            'ipi_cst': '99',
+            'ipi_aliquota': ipi.tax_line_id.amount or 0,
+            'ipi_base_calculo': self.price_total or 0,
+            'ipi_valor': round(self.price_total * ipi.tax_line_id.amount / 100, 2),
+            # 'ipi_reducao_bc': self.ipi_reducao_bc,
+            # - II -
+            # 'ii_base_calculo': self.ii_base_calculo,
+            # 'ii_valor_despesas': self.ii_valor_despesas,
+            # 'ii_valor': self.ii_valor,
+            # 'ii_valor_iof': self.ii_valor_iof,
+            # - PIS -
+            'pis_cst': '49',
+            'pis_aliquota': pis.tax_line_id.amount or 0,
+            'pis_base_calculo': self.price_total or 0,
+            'pis_valor': round(self.price_total * pis.tax_line_id.amount / 100, 2),
+            # 'pis_valor_retencao':
+            # abs(self.pis_valor) if self.pis_valor < 0 else 0,
+            # - COFINS -
+            'cofins_cst': '49',
+            'cofins_aliquota':  cofins.tax_line_id.amount or 0,
+            'cofins_base_calculo': self.price_total or 0,
+            'cofins_valor': round(self.price_total * cofins.tax_line_id.amount / 100, 2),
+            # 'cofins_valor_retencao':
+            # abs(self.cofins_valor) if self.cofins_valor < 0 else 0,
+            # - ISS -
+            'item_lista_servico': self.product_id.service_type_id.code,
+            'codigo_servico_municipio': self.product_id.service_code,
+            'iss_aliquota': iss.tax_line_id.amount or 0,
+            'iss_base_calculo': self.price_subtotal or 0,
+            'iss_valor': round(self.price_subtotal * iss.tax_line_id.amount / 100, 2),
+            # 'iss_valor_retencao':
+            # abs(self.iss_valor) if self.iss_valor < 0 else 0,
+            # - RETENÇÔES -
+            'csll_aliquota': csll.tax_line_id.amount or 0,
+            'csll_base_calculo': self.price_total or 0,
+            'csll_valor': round(self.price_total * csll.tax_line_id.amount / 100, 2),
+            # abs(self.csll_valor) if self.csll_valor < 0 else 0,
+            'irpj_aliquota':  irpj.tax_line_id.amount or 0,
+            'irpj_base_calculo': self.price_total or 0,
+            'irpj_valor': round(self.price_total * irpj.tax_line_id.amount / 100, 2),
+            # 'irrf_base_calculo': self.irrf_base_calculo,
+            # 'irrf_aliquota': abs(self.irrf_aliquota),
+            # 'irrf_valor_retencao':
+            # abs(self.irrf_valor) if self.irrf_valor < 0 else 0,
+            'inss_base_calculo': self.price_subtotal or 0,
+            'inss_aliquota': abs(inss.tax_line_id.amount or 0),
+            'inss_valor_retencao': abs(
+                round(self.price_subtotal * inss.tax_line_id.amount / 100, 2)
+            ),
+            'frete': self.l10n_br_delivery_amount,
+            'seguro': self.l10n_br_insurance_amount,
+            'outras_despesas': self.l10n_br_expense_amount,
+        }
+        cfop = fiscal_pos.l10n_br_cfop_id.code or '5101'
+
+        if self.move_id.type in ['in_invoice', 'out_refund']:
+            if self.move_id.company_id.state_id == self.move_id.commercial_partner_id.state_id:
+                cfop = '1' + cfop[1:]
+            else:
+                cfop = '2' + cfop[1:]
+        elif self.move_id.type in ['out_invoice', 'in_refund']:
+            if self.move_id.company_id.state_id == self.move_id.commercial_partner_id.state_id:
+                cfop = '5' + cfop[1:]
+            else:
+                cfop = '6' + cfop[1:]
+
+        vals['cfop'] = cfop
+        return vals

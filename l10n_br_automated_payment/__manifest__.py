@@ -20,8 +20,13 @@
         'account',
         'l10n_br_base_address',
     ],
+    'external_dependencies': {
+        'python': [
+            'iugu',
+        ],
+    },
     'data': [
-        'data/iugu_check_cron.xml',
+        'data/verify_transaction_cron.xml',
         'views/res_company.xml',
         'views/account_move.xml',
         'views/account_journal.xml',
